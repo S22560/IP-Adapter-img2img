@@ -52,11 +52,13 @@ class MyDataset(torch.utils.data.Dataset):
         item = self.data[idx] 
         text = item["text"]
         image_file = item["image_file"]
+        rough_image_file = item["rough_image_file"]
         
         # read image
         raw_image = Image.open(os.path.join(self.image_root_path, image_file))
+        rough_image = Image.open(os.path.join(self.image_root_path, rough_image_file))
         image = self.transform(raw_image.convert("RGB"))
-        clip_image = self.clip_image_processor(images=raw_image, return_tensors="pt").pixel_values
+        clip_image = self.clip_image_processor(images=rough_image, return_tensors="pt").pixel_values
         
         # drop
         drop_image_embed = 0
@@ -296,7 +298,9 @@ def main():
     tokenizer = CLIPTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer")
     text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder")
     vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
-    unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet")
+    # unet = UNet2DConditionModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="unet")
+    config = UNet2DConditionModel.load_config(args.pretrained_model_name_or_path, subfolder="unet")
+    unet = UNet2DConditionModel.from_config(config)
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(args.image_encoder_path)
     # freeze parameters of models to save more memory
     unet.requires_grad_(False)
@@ -354,7 +358,8 @@ def main():
     image_encoder.to(accelerator.device, dtype=weight_dtype)
     
     # optimizer
-    params_to_opt = itertools.chain(ip_adapter.image_proj_model.parameters(),  ip_adapter.adapter_modules.parameters())
+    # params_to_opt = itertools.chain(ip_adapter.image_proj_model.parameters(),  ip_adapter.adapter_modules.parameters())
+    params_to_opt = ip_adapter.parameters()
     optimizer = torch.optim.AdamW(params_to_opt, lr=args.learning_rate, weight_decay=args.weight_decay)
     
     # dataloader
